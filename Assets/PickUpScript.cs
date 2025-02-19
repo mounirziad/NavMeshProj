@@ -20,7 +20,7 @@ public class PickUpScript : MonoBehaviour
 
     void Start()
     {
-        // Set the layer for held objects (make sure this layer exists in your project)
+        // Set the layer for held objects 
         holdLayer = LayerMask.NameToLayer("holdLayer");
 
         // Create a layer mask that ignores the "Player" layer.
