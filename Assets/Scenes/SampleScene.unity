@@ -556,7 +556,7 @@ MonoBehaviour:
   timeToRotate: 1
   speedWalk: 4
   speedRun: 4
-  viewRadius: 22
+  viewRadius: 18
   viewAngle: 90
   playerMask:
     serializedVersion: 2
