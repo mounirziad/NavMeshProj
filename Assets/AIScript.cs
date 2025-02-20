@@ -79,36 +79,59 @@ public class AIScript : MonoBehaviour
         m_PlayerNear = false; // Reset player near flag
         playerLastPosition = Vector3.zero; // Reset player's last known position
 
-        if (!m_CaughtPlayer) // If the player hasn't been caught
+        if (!m_CaughtPlayer) // If the AI hasn't caught the player
         {
             Move(speedRun); // Move at running speed
-            navMeshAgent.SetDestination(m_PlayerPosition); // Set destination to the player's position
+
+            // Find both the player and the canPickUp object
+            GameObject player = GameObject.FindGameObjectWithTag("Player");
+            GameObject canPickUp = GameObject.FindGameObjectWithTag("canPickUp");
+
+            if (player != null && canPickUp != null)
+            {
+                float playerDistance = Vector3.Distance(transform.position, player.transform.position);
+                float canPickUpDistance = Vector3.Distance(transform.position, canPickUp.transform.position);
+
+                // Chase the closer object
+                if (playerDistance < canPickUpDistance)
+                {
+                    navMeshAgent.SetDestination(player.transform.position);
+                }
+                else
+                {
+                    navMeshAgent.SetDestination(canPickUp.transform.position);
+                }
+            }
+            else if (player != null)
+            {
+                navMeshAgent.SetDestination(player.transform.position);
+            }
+            else if (canPickUp != null)
+            {
+                navMeshAgent.SetDestination(canPickUp.transform.position);
+            }
         }
 
-        // If the AI is close to the player's last known position
         if (navMeshAgent.remainingDistance <= navMeshAgent.stoppingDistance)
         {
-            // If the wait time is over and the player is far enough away, return to patrol mode
-            if (m_WaitTime <= 0 && !m_CaughtPlayer && Vector3.Distance(transform.position, GameObject.FindGameObjectWithTag("Player").transform.position) >= 6f)
+            if (m_WaitTime <= 0 && !m_CaughtPlayer && GameObject.FindGameObjectWithTag("Player") != null &&
+                Vector3.Distance(transform.position, GameObject.FindGameObjectWithTag("Player").transform.position) >= 6f)
             {
-                m_IsPatrol = true; // Switch to patrol mode
-                m_PlayerNear = false; // Reset player near flag
-                Move(speedWalk); // Move at walking speed
-                m_TimeToRotate = timeToRotate; // Reset rotation time
-                m_WaitTime = startWaitTime; // Reset wait time
-                navMeshAgent.SetDestination(waypoints[m_CurrentWaypointIndex].position); // Move to the next waypoint
+                m_IsPatrol = true; // Switch back to patrol mode
+                m_PlayerNear = false;
+                Move(speedWalk);
+                m_TimeToRotate = timeToRotate;
+                m_WaitTime = startWaitTime;
+                navMeshAgent.SetDestination(waypoints[m_CurrentWaypointIndex].position);
             }
             else
             {
-                // If the player is still nearby, stop and wait
-                if (Vector3.Distance(transform.position, GameObject.FindGameObjectWithTag("Player").transform.position) >= 2.5f)
-                {
-                    Stop(); // Stop moving
-                    m_WaitTime -= Time.deltaTime; // Decrease wait time
-                }
+                Stop();
+                m_WaitTime -= Time.deltaTime;
             }
         }
     }
+
 
     // Method to handle patrolling behavior
     private void Patroling()
@@ -204,42 +227,44 @@ public class AIScript : MonoBehaviour
     // Method to detect the player in the environment
     void EnvironmentView()
     {
-        // Detect all colliders within the view radius that are on the player layer
-        Collider[] playerInRange = Physics.OverlapSphere(transform.position, viewRadius, playerMask);
+        // Detect all colliders within the view radius for player and canPickUp
+        Collider[] targetsInRange = Physics.OverlapSphere(transform.position, viewRadius, playerMask | LayerMask.GetMask("canPickUp"));
 
-        for (int i = 0; i < playerInRange.Length; i++)
+        Transform closestTarget = null;
+        float closestDistance = Mathf.Infinity;
+
+        foreach (Collider target in targetsInRange)
         {
-            Transform player = playerInRange[i].transform; // Get the player's transform
-            Vector3 dirToPlayer = (player.position - transform.position).normalized; // Get direction to the player
+            Transform targetTransform = target.transform;
+            Vector3 dirToTarget = (targetTransform.position - transform.position).normalized;
+            float distanceToTarget = Vector3.Distance(transform.position, targetTransform.position);
 
-            // Check if the player is within the AI's field of view
-            if (Vector3.Angle(transform.forward, dirToPlayer) < viewAngle / 2)
+            // Check if the target is within the AI's field of view and not blocked by obstacles
+            if (Vector3.Angle(transform.forward, dirToTarget) < viewAngle / 2)
             {
-                float dstToPlayer = Vector3.Distance(transform.position, player.position); // Calculate distance to the player
-
-                // Check if the player is not blocked by obstacles
-                if (!Physics.Raycast(transform.position, dirToPlayer, dstToPlayer, obstacleMask))
+                if (!Physics.Raycast(transform.position, dirToTarget, distanceToTarget, obstacleMask))
                 {
-                    m_PlayerInRange = true; // Set player in range flag
-                    m_IsPatrol = false; // Switch to chasing mode
+                    // If this target is the closest, prioritize it
+                    if (distanceToTarget < closestDistance)
+                    {
+                        closestDistance = distanceToTarget;
+                        closestTarget = targetTransform;
+                    }
                 }
-                else
-                {
-                    m_PlayerInRange = false; // Reset player in range flag
-                }
-            }
-
-            // If the player is outside the view radius, reset the player in range flag
-            if (Vector3.Distance(transform.position, player.position) > viewRadius)
-            {
-                m_PlayerInRange = false;
-            }
-
-            // If the player is in range, update the player's position
-            if (m_PlayerInRange)
-            {
-                m_PlayerPosition = player.transform.position;
             }
         }
+
+        // If we found a valid target, chase it
+        if (closestTarget != null)
+        {
+            m_IsPatrol = false;
+            m_PlayerInRange = true;
+            m_PlayerPosition = closestTarget.position;
+        }
+        else
+        {
+            m_PlayerInRange = false;
+        }
     }
+
 }
